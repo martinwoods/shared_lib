@@ -12,5 +12,3 @@ def call() {
         uptime
     """
 }
-
-return this
