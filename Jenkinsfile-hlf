@@ -1,0 +1,177 @@
+// Jenkinsfile
+// Description: To Helm, Configure Kube Cluster, setup CA's, Crypto, Orderers, Peers, HLC and Extras
+// Written by: Martin Woods - martin@aid.technology
+
+// Import Shared Library
+@Library('jenkins-shared-lib@subtask_DO-171')_
+
+// Groovy vars defind outside the declarative pipeline
+def setup_ca = 'python3.7 -v ./hlf/setup_ca.py -f ./\${DEPLOYMENT}/\${PROJECT}/hlf/hlf_config.yaml'
+def setup_crypto = 'python3.7 ./hlf/setup_crypto.py -v -f ./\${DEPLOYMENT}/\${PROJECT}/hlf/hlf_config.yaml'
+def setup_ord = 'python3.7 ./hlf/setup_ord.py -v -f ./\${DEPLOYMENT}/\${PROJECT}/hlf/hlf_config.yaml'
+def setup_peer = 'python3.7 ./hlf/setup_peer.py -v -f ./\${DEPLOYMENT}/\${PROJECT}/hlf/hlf_config.yaml'
+def setup_hlc = 'python3.7 ./hlf/setup_hlc.py -v -f ./\${DEPLOYMENT}/\${PROJECT}/hlf/hlf_config.yaml'
+def setup_extras = 'python3.7 ./hlf/setup_extras.py -v -f ./\${DEPLOYMENT}/\${PROJECT}/hlf/hlf_config.yaml'
+def configureKubeClusterPython = " \
+                    export PYTHONPATH=\"\$(find \${WORKSPACE}/ -maxdepth 4 -type d | sed '/\\./d' | tr '\\n' ':' | sed 's/:\$//')\" ; \
+                    helm version ; \
+                    pip3 install -r ./requirements.txt ; \
+                    az login --service-principal -u \${ARM_CLIENT_ID} -p \${ARM_CLIENT_SECRET} --tenant \${ARM_TENANT_ID} ; \
+                    az aks get-credentials -g \${AZ_RESOURCE_GROUP} -n \${AZ_AKS_CLUSTER} ; \
+                    echo \${AZ_RESOURCE_GROUP} ; \
+                    echo \${AZ_AKS_CLUSTER} ; \
+                    python3.7 k8s_utils/k8s_setup.py -s \${STORAGE_ACCOUNT} -c \${AZ_AKS_CLUSTER} \
+                    "
+
+pipeline {
+    
+    agent any
+
+    options {
+        // Disallow concurrent executions of the Pipeline   
+        disableConcurrentBuilds()
+    }
+
+    // Environmet Specific Data
+    environment {
+        
+        HELM_VERSION="v2.11.0"
+        KUBECTL_VERSION="v1.11.3"
+
+        AZ_RESOURCE_GROUP="martin-pg"
+        AZ_AKS_CLUSTER="MartinManagedCluster"
+        STORAGE_ACCOUNT="storage0martinmc0aks"
+        
+        HLF_TOOLS_BUILD_CA="linux-amd64-1.2.0"
+        HLF_TOOLS_BUILD="linux-amd64-1.2.0"
+
+        CHARTMUSEUM_URL="https://chartmuseum.devops.aidtech-test.xyz"
+        CHARTMUSEUM_USER = credentials('jenkins-chartmuseum-user-pass')
+        CHARTMUSEUM_PASS = credentials('jenkins-chartmuseum-user-pass')
+
+        PROJECT="mmc_dev"
+        DEPLOYMENT = "test_deployments"
+    
+    }
+
+    stages{
+
+        stage('Clean Workspace') {
+             steps {
+                deleteDir() /* clean up our workspace */
+            }
+        }
+
+        // Checking code out from deployer project in GitHub
+        stage('Checkout from SCM') {
+            steps {
+                git url: "https://github.com/aidtechnology/deployer.git", 
+                branch: 'DO-87-Jenkinsfile', 
+                credentialsId: 'jx-pipeline-git-github-github'
+            }
+        }
+
+        // Install Dependecies needed by the subsequent stages in the pipeline
+        stage('Install Dependencies') {
+            steps {
+                script {
+                    jenkinsHelmInstall '${HELM_VERSION}'
+                    jenkinsAzCliInstall()
+                    jenkinsKubectlInstall '${KUBECTL_VERSION}'
+                    jenkinsPythonPipInstall()
+                    jenkinsFabricCaClientInstall '${HLF_TOOLS_BUILD_CA}'
+                    jenkinsFabricConfigTxGenInstall '${HLF_TOOLS_BUILD}'
+                    jenkinsIncubatorInstall()
+                }
+            }
+        }
+
+        // Configure Kube Cluster - py script performs Ingress Controller, Certificate Manager
+        stage ('Configure Kube Cluster Python'){
+            steps {
+                script { 
+                    jenkinsSecretCredentials(configureKubeClusterPython) 
+                }
+            }
+        }
+
+        // Runs hlf setup ca python script
+        stage ('Certificate Manager CAs'){
+            steps {
+                script {
+                    jenkinsChartMuseum()
+                    jenkinsPythonPathInput(setup_ca)
+                }
+            }
+        }
+
+       // Runs hlf setup crypto python script
+        stage ('Setup Crypto'){
+            steps {
+                script {
+                    jenkinsChartMuseum()
+                    jenkinsPythonPathInput(setup_crypto)
+                }
+            }
+        }
+
+       // Runs hlf setup orderers python script
+        stage ('Setup Orderers'){
+            steps {
+                script {
+                    jenkinsChartMuseum()
+                    jenkinsPythonPathInput(setup_ord)
+                }
+            }
+        }
+
+        // Runs hlf setup peers python script
+        stage ('Setup Peers'){
+            steps {
+                script {
+                    jenkinsChartMuseum()
+                    jenkinsPythonPathInput(setup_peer)
+                }
+            }
+        }
+
+       // Saves HLC BAN to the kube cluster, also checks to see if it exists
+        stage ('Save HLC BNA to K8S') {
+            steps{
+                script {
+                    def exitStatusSecrets = sh (returnStatus: true, script: 'kubectl -n blockchain get secrets -o=\'name\' | sed -r \'s/^secret\\///\' | grep -i \'bc--bna\'')
+
+                    System.out.println(exitStatusSecrets.toString());
+
+                    if (exitStatusSecrets == 0) {
+                        def KUBE_SECRET = sh (returnStdout: true, script: 'kubectl -n blockchain get secrets -o=\'name\' | sed -r \'s/^secret\\///\' | grep -i \'bc--bna\'').trim()
+                        echo "${KUBE_SECRET} ALREADY EXISTS"
+                        
+                    } else {
+                        sh "kubectl -n blockchain create secret generic bc--bna --from-file=aidtech-donation-hlf_0.0.14.bna=./\${DEPLOYMENT}/${PROJECT}/hlf/aidtech-donation-hlf@0.0.14.bna"
+                    }
+                }
+            }
+        }
+
+       // Runs hlf setup HLC python script
+        stage ('Setup HLC'){
+            steps {
+                script {
+                    jenkinsChartMuseum()
+                    jenkinsPythonPathInput(setup_hlc)
+                }
+            }
+        }
+
+       // Runs hlf setup extras python script
+        stage ('Install Extras'){
+            steps {
+                script {
+                    jenkinsChartMuseum()
+                    jenkinsPythonPathInput(setup_extras)
+                }
+            }
+        }
+    }
+}

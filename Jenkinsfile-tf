@@ -1,0 +1,222 @@
+// Jenkinsfile
+// Description: Create Terraform Infrastructure in Azure Cloud  
+// Written by: Martin Woods - martin@aid.technology
+
+//Import Shared Library
+@Library('jenkins-shared-lib@subtask_DO-171')_
+
+//Define vars outside of the scope of Declaritive Pipeline for use in Scripted Code Blocks (Groovy)
+
+def terraformVersion = 'Terraform v0.11.10'
+
+def azureARMEnvironmentVars = 'export ARM_CLIENT_ID=\${ARM_CLIENT_ID} ; \
+                               export ARM_CLIENT_SECRET=\${ARM_CLIENT_SECRET} ; \
+                               export ARM_TENANT_ID=\${ARM_TENANT_ID} ; \
+                               export ARM_SUBSCRIPTION_ID=\${ARM_SUBSCRIPTION_ID}'
+
+def azureServicePrincipalLogin = { sh "az login --service-principal -u ${ARM_CLIENT_ID} -p ${ARM_CLIENT_SECRET} --tenant ${ARM_TENANT_ID}" }
+
+def resourceGroupTerraformInit = { sh "cd ${TERRAFORM_RG_DIR} ; terraform init -backend-config=\"access_key=${TERRAFORM_STORAGE_ACCESS_KEY}\"" }
+
+def storageGroupTerraformInit = { sh "cd ${TERRAFORM_SQA_DIR} ; terraform init -backend-config=\"access_key=${TERRAFORM_STORAGE_ACCESS_KEY}\"" }
+
+def sqlServerGroupTerraformInit = { sh "cd ${TERRAFORM_SQLS_DIR} ; terraform init -backend-config=\"access_key=${TERRAFORM_STORAGE_ACCESS_KEY}\"" }
+
+def sequelizeParamMigrate = 'cd ${SEQUELIZE_DIR} ; sequelize db:migrate --env production'
+
+def sequelizeParamSeed = 'cd sequelize && sequelize db:seed:all --seeders-path seeders/core --env production'
+
+def terraformPlan = { sh "cd ${TERRAFORM_SQLS_DIR} ; terraform plan -var \"sql_password=${AZURE_SQL_PASSWORD}\" " }
+
+def terraformApply = { sh "cd ${TERRAFORM_SQLS_DIR} ; terraform apply -var \"sql_password=${AZURE_SQL_PASSWORD}\" -auto-approve" }
+
+//Start of Declaritive Pipeline
+pipeline {
+    agent any
+
+    options {
+        // Disallow concurrent executions of the Pipeline   
+        disableConcurrentBuilds()
+    }
+
+    environment {
+
+        //Declaring env vars to be used in Jenkinsfile
+        TERRAFORM_VERSION="0.11.10"
+        TERRAFORM_RG_DIR = "terraform/martin-pg/resource_group/"
+        TERRAFORM_SQA_DIR = "terraform/martin-pg/storage-qa/"
+        TERRAFORM_SQLS_DIR = "terraform/martin-pg/sqlserver-qa/"
+        
+        SEQUELIZE_DIR = "sequelize/"
+        
+        AZURE_SQL_USER="aidtech"
+        AZURE_SQL_SERVER ="martinmanagedcluster-qa-sqlserver.database.windows.net"
+        AZURE_SQL_DB ="offchain_data"
+
+        RESOURCE_GROUP= "martin-pg"
+        HLF_API_URL="http://aidtech-hl-aidtech-hl-0-0-13-dev-vm.westeurope.cloudapp.azure.com:3000/api"
+        
+    }
+
+    stages {
+
+        //Clean Workspace
+        stage('Clean Workspace') {
+             steps {
+                deleteDir() /* clean up our workspace */
+            }
+        }
+
+        // Checking code out from infrastructure project in GitHub
+        stage('Checkout from SCM') {
+            steps {
+                git url: "https://github.com/aidtechnology/infrastructure.git", 
+                branch: 'subtask_DO-149', 
+                credentialsId: 'jx-pipeline-git-github-github'
+            }
+        }
+
+        //Intall all the application Dependcies Required by the stages in the pipeline
+        stage('Install Application Dependencies') {
+            steps {
+                script {
+                    terraformVersion = sh(returnStatus: true, script: 'terraform -v')
+                }
+                script {
+                    if (terraformVersion != 'Terraform v${TERRAFORM_VERSION}') {
+                        jenkinsAptUpdateUpgrade()
+                        jenkinsUnzipInstall()
+                        jenkinsWgetInstall()
+                        jenkinsTerraformInstall()
+                        jenkinsNvmNodejsInstall()
+                        jenkinsSequelizeInstall()
+                    } else {
+                        echo "Terraform v${TERRAFORM_VERSION} is an installed dependency"
+                    }
+                }  
+            }
+        }
+
+        //Resource Group Terraform Init
+        stage('Resource Group - Terraform Init') {
+            steps {
+                script{
+                     jenkinsSecretCredentials(resourceGroupTerraformInit)
+                }       
+            }
+        }
+        //Resource Group Terraform Plan        
+        stage('Resource Group - Terraform Plan') {
+            steps {
+                script {
+                    jenkinsSecretCredentials() {
+                        sh "${azureARMEnvironmentVars} ; cd ${TERRAFORM_RG_DIR} ; terraform plan"
+                    }
+                }
+            }
+        }
+
+        //Resource Group - to approve Terraform Plan Yes/No?
+        stage('Resource Group - Approval') {
+            steps {
+                jenkinsStageApproval()
+            }
+        }
+       //Resource Group Terraform Apply
+        stage('Resource Group - Terraform Apply') {
+            steps {
+                script {
+                    jenkinsSecretCredentials() {
+                        sh "${azureARMEnvironmentVars} ; cd ${TERRAFORM_RG_DIR} ; terraform apply"
+                    }
+                }
+            }
+        }
+
+       //Storage QA Terraform Init
+        stage('Storage QA - Terraform Init') {
+            steps {
+                jenkinsSecretCredentials(storageGroupTerraformInit)
+            }
+        }
+       //Storage QA Terraform Init
+        stage('Storage QA - Terraform Plan') {
+            steps {
+                script {
+                    jenkinsSecretCredentials() {
+                        sh "${azureARMEnvironmentVars} ; cd ${TERRAFORM_RG_DIR} ; terraform plan"
+                    }
+                }
+            }
+        }
+        //Storage QA - to approve Terraform Plan Yes/No?
+        stage('Storage QA - Approval') {
+            steps {
+                jenkinsStageApproval()
+            }
+        }
+
+       //Storage QA Terraform Apply
+        stage('Storage QA - Terraform Apply') {
+            steps {
+                script {
+                    jenkinsSecretCredentials() {
+                        sh "${azureARMEnvironmentVars} ; cd ${TERRAFORM_SQA_DIR} ; terraform apply"
+                    }
+                }
+            }
+        }
+
+       //SQL Server Terraform Init
+        stage('SQL Server - Terraform Init') {
+            steps {
+                jenkinsSecretCredentials(sqlServerGroupTerraformInit)
+            }
+        }
+       //SQL Server Terraform Plan
+        stage('SQL Server - Terraform Plan') {
+            steps {
+                script {
+                    sh "pwd"
+                }
+                jenkinsSecretCredentials(terraformPlan)
+                // jenkinsTerraformExportValues(terraformPlan)
+            }
+        }
+        //SQL Server - to approve Terraform Plan Yes/No?
+        stage('SQL Server - Approval') {
+            steps {
+                jenkinsStageApproval()
+            }
+        }
+
+       //SQL Server Terraform Apply
+        stage('SQL Server - Terraform Apply') {
+            steps {
+               jenkinsSecretCredentials(terraformApply)
+               //jenkinsTerraformExportValues(terraformApply) 
+            }
+        }
+
+        // Checking code out from infrastructure project in GitHub
+        stage('Checkout SCM from donation-api') {
+            steps {
+                git url: "https://github.com/aidtechnology/donation-api.git/", 
+                branch: 'develop', 
+                credentialsId: 'jx-pipeline-git-github-github'
+            }
+        }
+        // Sequelize Migrate
+        stage('Sequelize Migrate') {
+            steps {
+                jenkinsSecretCredentials { jenkinsSequelizeExportValues(sequelizeParamMigrate) }          
+            }
+        }
+        // Sequelize Seed
+        stage('Sequelize Seed') {
+            steps {
+                jenkinsSecretCredentials { jenkinsSequelizeExportValues(sequelizeParamSeed) }             
+            }
+        }    
+    }   
+}
