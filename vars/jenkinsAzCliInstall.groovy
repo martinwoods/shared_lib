@@ -2,7 +2,7 @@
 // vars/jenkinsAzCliInstall.groovy
 
 // Description: This funtion installs the Azure CLI   
-// Written by: Martin Woods - martin@aid.technology
+// Written by: Martin Woods - martinwoods.ie@gmail.com
 
 def call() {
 

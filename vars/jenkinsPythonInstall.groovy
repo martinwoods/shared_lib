@@ -2,7 +2,7 @@
 // vars/jenkinsPythonInstall.groovy
 
 // Description: This funtion installs the Python version we wish to use across all Jenkinsfile's that need to run Python   
-// Written by: Martin Woods - martin@aid.technology
+// Written by: Martin Woods - martinwoods.ie@gmail.com
 
 def call(PYTHON_VERSION) {
 

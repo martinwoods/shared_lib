@@ -2,7 +2,7 @@
 // vars/jenkinsSequelizeExportValues.groovy
 
 // Description: This funtion exports values for Sequelize
-// Written by: Martin Woods - martin@aid.technology
+// Written by: Martin Woods - martinwoods.ie@gmail.com
 
 def call(shellParam) {
     sh """

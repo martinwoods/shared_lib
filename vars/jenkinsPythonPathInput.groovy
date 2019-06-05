@@ -2,7 +2,7 @@
 // vars/jenkinsPythonPathInput.groovy
 
 // Description: This method excepts as input python script while setting the PYTHONPATH
-// Written by: Martin Woods - martin@aid.technology
+// Written by: Martin Woods - martinwoods.ie@gmail.com
 
 def call(pythonScriptInput) {
     sh """

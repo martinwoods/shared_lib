@@ -2,7 +2,7 @@
 // vars/jenkinsTerraformInstall.groovy
 
 // Description: This method is used to install Terraform
-// Written by: Martin Woods - martin@aid.technology
+// Written by: Martin Woods - martinwoods.ie@gmail.com
 
 def call() {
     sh"""

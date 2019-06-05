@@ -2,7 +2,7 @@
 // vars/jenkinsSecretCredentials.groovy
 
 // Description: This method returns a list of hidden secret credentials using the withCredentials plugin
-// Written by: Martin Woods - martin@aid.technology
+// Written by: Martin Woods - martinwoods.ie@gmail.com
 
 def call(Closure inputData) {
     withCredentials ([string(credentialsId: 'jenkins-openexchanges-api-id', variable: 'OPENEXCHANGES_API_ID'), 

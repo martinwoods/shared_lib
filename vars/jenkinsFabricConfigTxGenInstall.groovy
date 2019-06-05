@@ -2,7 +2,7 @@
 // vars/jenkinsFabricConfigTxGenInstall.groovy
 
 // Description: This funtion installs the Fabric configtxgen  
-// Written by: Martin Woods - martin@aid.technology
+// Written by: Martin Woods - martinwoods.ie@gmail.com
 
 def call(HLF_TOOLS_BUILD) {
     // Fabric configtxgen Install

@@ -10,7 +10,7 @@ ut it does not install or upgrade any packages.
 apt-get upgrade: actually installs newer versions of the packages you have. 
 After updating the lists, the package manager knows about available updates for the software you have installed.
 
-Written by: Martin Woods - martin@aid.technology
+Written by: Martin Woods - martinwoods.ie@gmail.com
  */
 
 

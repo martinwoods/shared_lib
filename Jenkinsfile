@@ -1,6 +1,6 @@
 // Jenkinsfile
 // Description: To deploy Donation SMS, API & Frontend   
-// Written by: Martin Woods - martin@aid.technology
+// Written by: Martin Woods - martinwoods.ie@gmail.com
 
 // Import Shared Library
 @Library('jenkins-shared-lib@subtask_DO-171')_

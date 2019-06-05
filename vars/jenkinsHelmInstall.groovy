@@ -2,7 +2,7 @@
 // vars/jenkinsHelmInstall.groovy
 
 // Description: This funtion installs the Helm version we wish to use across all Jenkinsfile's that need to run Helm   
-// Written by: Martin Woods - martin@aid.technology
+// Written by: Martin Woods - martinwoods.ie@gmail.com
 
 def call(HELM_VERSION) {
 

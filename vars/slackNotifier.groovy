@@ -2,7 +2,7 @@
 // vars/slackNotifier.groovy
 
 // Description: This method sends notfications to slack
-// Written by: Martin Woods - martin@aid.technology
+// Written by: Martin Woods - martinwoods.ie@gmail.com
 
 def call(String buildResult) {
   if ( buildResult == "SUCCESS" ) {
