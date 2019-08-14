@@ -48,7 +48,7 @@ pipeline {
         // Checking code out from GitHub
         stage('Checkout from SCM') {
             steps {
-                git url: "https://github.com/aidtechnology/deployer.git", 
+                git url: "https://github.com/*.git", 
                 branch: 'DO-87-Jenkinsfile', 
                 credentialsId: 'jx-pipeline-git-github-github'
             }
